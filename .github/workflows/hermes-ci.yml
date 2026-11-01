@@ -50,6 +50,7 @@ jobs:
           printf '### Tested source\nRepository: %s\n\nBranch: %s\n\nSHA: `%s`\n\nRunner: `%s`\n' "$GITHUB_REPOSITORY" "$TEST_BRANCH" "$TEST_SHA" "$RUNNER_NAME" >> "$GITHUB_STEP_SUMMARY"
       - name: License
         id: license
+        timeout-minutes: 10
         continue-on-error: true
         uses: apache/skywalking-eyes/header@5c28835454eb069b7a4667430f2c40a3d5a9912c
         with:
@@ -58,12 +59,14 @@ jobs:
           token: ''
       - name: Setup project Go
         id: go
+        timeout-minutes: 15
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version-file: go.mod
           cache: false
       - name: Setup Java 8 for ZooKeeper unit tests
         id: java
+        timeout-minutes: 10
         continue-on-error: true
         uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
         with:
@@ -81,6 +84,7 @@ jobs:
           echo "ZOOKEEPER_PATH=${jar_path%/contrib/fatjar/*}" >> "$GITHUB_ENV"
       - name: Format (clean source worktree)
         id: format
+        timeout-minutes: 30
         continue-on-error: true
         run: |
           git worktree add --detach "$RUNNER_TEMP/format" HEAD
@@ -89,10 +93,12 @@ jobs:
           git diff --exit-code -- '*.go'
       - name: Lint
         id: lint
+        timeout-minutes: 30
         continue-on-error: true
         run: make lint
       - name: Unit Test
         id: unit
+        timeout-minutes: 45
         if: ${{ !cancelled() && steps.go.outcome == 'success' && steps.java.outcome == 'success' && steps.zk.outcome == 'success' }}
         continue-on-error: true
         run: |
@@ -100,6 +106,7 @@ jobs:
           cp coverage.txt "$RUNNER_TEMP/coverage-unit.txt"
       - name: Race Test
         id: race
+        timeout-minutes: 60
         if: ${{ !cancelled() && steps.go.outcome == 'success' && steps.java.outcome == 'success' && steps.zk.outcome == 'success' }}
         continue-on-error: true
         env:
@@ -117,6 +124,7 @@ jobs:
           cache: false
       - name: OpenAPI Tests
         id: openapi
+        timeout-minutes: 15
         if: ${{ !cancelled() && steps.openapi_go.outcome == 'success' }}
         continue-on-error: true
         working-directory: tools/protoc-gen-triple-openapi
