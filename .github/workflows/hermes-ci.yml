@@ -129,7 +129,35 @@ jobs:
         continue-on-error: true
         working-directory: tools/protoc-gen-triple-openapi
         run: go test ./... -count=1
-      - name: Coverage artifacts (Codecov not configured)
+      - name: Preserve coverage on Hermes
+        id: coverage
+        if: ${{ !cancelled() && steps.unit.outcome == 'success' && steps.race.outcome == 'success' }}
+        continue-on-error: true
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, os, pathlib, shutil, time
+          root = pathlib.Path('/home/runner/cache/reports')
+          root.mkdir(exist_ok=True)
+          dest = root / (os.environ['GITHUB_RUN_ID'] + '-' + os.environ['GITHUB_RUN_ATTEMPT'])
+          dest.mkdir(exist_ok=True)
+          files = {}
+          for name in ('coverage-unit.txt', 'coverage-race.txt'):
+              src = pathlib.Path(os.environ['RUNNER_TEMP']) / name
+              assert src.is_file() and src.stat().st_size > 0, name
+              shutil.copyfile(src, dest / name)
+              files[name] = hashlib.sha256(src.read_bytes()).hexdigest()
+          (dest / 'manifest.json').write_text(json.dumps({'sha': os.environ['TEST_SHA'], 'url': os.environ['RUN_URL'], 'files': files}, indent=2))
+          for i, p in enumerate(sorted(root.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True)):
+              if p.is_dir() and not p.is_symlink() and (i >= 20 or p.stat().st_mtime < time.time() - 14*86400):
+                  shutil.rmtree(p)
+          print('Coverage saved on Hermes:', dest.name, json.dumps(files))
+          PY
+        env:
+          TEST_SHA: ${{ inputs.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      - name: Coverage artifacts (optional GitHub mirror)
+        id: upload
+        continue-on-error: true
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -147,11 +175,13 @@ jobs:
           python3 - <<'PY'
           import json, os
           s = json.loads(os.environ['RESULTS'])
-          required = ['license', 'go', 'java', 'zk', 'format', 'lint', 'unit', 'race', 'openapi_go', 'openapi']
+          required = ['license', 'go', 'java', 'zk', 'format', 'lint', 'unit', 'race', 'openapi_go', 'openapi', 'coverage']
           with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as f:
               f.write('\n| Check | Outcome |\n|---|---|\n')
               for k in required:
                   f.write(f"| {k} | {s.get(k, {}).get('outcome', 'not run')} |\n")
+              f.write(f"| optional GitHub artifact mirror | {s.get('upload', {}).get('outcome', 'not run')} |\n")
+              f.write('\nCoverage is retained on Hermes (latest 20 runs, up to 14 days, subject to CI cache budget). GitHub mirror failure is a reporting limitation, not a test pass.\n')
               f.write('\nIntegration, generated CLI projects and RISC-V: outside phase 1. Codecov upload: not configured.\n')
           raise SystemExit(any(s.get(k, {}).get('outcome') != 'success' for k in required))
           PY

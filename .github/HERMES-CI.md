@@ -16,6 +16,11 @@ Phase 1 does not execute Samples integration, generated CLI project tests,
 RISC-V, release tasks, or CodeQL. Coverage generation is retained; Codecov
 upload is not configured. A skipped required check is not counted as a pass.
 
+Coverage files and SHA-256 manifests are retained on Hermes in the project CI
+cache (latest 20 runs, up to 14 days, subject to the 30GiB cache budget). Saving
+coverage is required. GitHub artifact upload is an optional mirror: account
+quota/upload failures remain visible in the summary and are not test passes.
+
 The controller requires Windows to remain connected while obtaining the
 Hermes slot and provisioning the short-lived Runner. Once started, the
 server systemd job continues independently. No long-lived GitHub management
