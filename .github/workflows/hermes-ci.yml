@@ -40,10 +40,11 @@ jobs:
         env:
           TEST_SHA: ${{ inputs.sha }}
         run: |
-          git clone --no-checkout /opt/source.bundle .
+          git init .
+          git fetch /opt/source.bundle '+refs/oss-ci/*:refs/oss-ci/*'
           git checkout --detach "$TEST_SHA"
           test "$(git rev-parse HEAD)" = "$TEST_SHA"
-          git remote set-url origin "https://github.com/$GITHUB_REPOSITORY.git"
+          git remote add origin "https://github.com/$GITHUB_REPOSITORY.git"
       - name: Record source identity
         env:
           TEST_SHA: ${{ inputs.sha }}
