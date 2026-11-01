@@ -8,6 +8,13 @@ commit SHA from a trusted personal branch. Only `dodjdnh` can invoke the
 self-hosted job. No pull-request event is configured. The Windows `oss-ci`
 command queues a globally serialized, rootless, ephemeral Runner on Hermes.
 
+Windows resolves the pushed Fork branch SHA through GitHub, bundles only its
+committed Git history, and transfers it over SSH with SHA-256 verification.
+Hermes mounts that bundle read-only. The job clones it and verifies HEAD equals
+the dispatched SHA, avoiding unreliable server-to-github.com Git transport.
+Uncommitted worktree files and unrelated refs are not bundled. No GitHub token
+is needed for source checkout, and Git object identity remains unchanged.
+
 Keep product branches based on Apache upstream, not on this control branch.
 Before an upstream PR, inspect the diff against upstream to ensure these
 personal CI files are absent.
