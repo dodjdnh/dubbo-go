@@ -1,0 +1,113 @@
+name: Hermes personal CodeQL
+run-name: "Hermes CodeQL ${{ inputs.branch }} @ ${{ inputs.sha }} [${{ inputs.request }}]"
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: Trusted personal Fork branch
+        required: true
+        type: string
+      sha:
+        description: Immutable tested commit SHA
+        required: true
+        type: string
+      request:
+        description: Windows controller request ID
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  codeql:
+    if: github.repository == 'dodjdnh/dubbo-go' && github.actor == 'dodjdnh' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, linux, x64, hermes-ci, 'hermes-${{ github.run_id }}-${{ github.run_attempt }}']
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+    env:
+      GOMAXPROCS: '2'
+      GOFLAGS: -p=2
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Validate and checkout exact source
+        env:
+          TEST_SHA: ${{ inputs.sha }}
+          TEST_BRANCH: ${{ inputs.branch }}
+        run: |
+          [[ "$TEST_SHA" =~ ^[a-f0-9]{40}$ ]]
+          [[ "$TEST_BRANCH" =~ ^(main|develop|(feat|fix|feature|test|docs|refactor|chore)/[a-zA-Z0-9._/-]+)$ ]]
+          git init .
+          git fetch /opt/source.bundle '+refs/oss-ci/*:refs/oss-ci/*'
+          git checkout --detach "$TEST_SHA"
+          test "$(git rev-parse HEAD)" = "$TEST_SHA"
+          git remote add origin "https://github.com/$GITHUB_REPOSITORY.git"
+          printf '### Tested CodeQL source\nBranch: %s\n\nSHA: `%s`\n' "$TEST_BRANCH" "$TEST_SHA" >> "$GITHUB_STEP_SUMMARY"
+      - name: Setup project Go
+        id: go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Initialize CodeQL (upstream default Go queries)
+        id: init
+        uses: github/codeql-action/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4
+        with:
+          languages: go
+          build-mode: manual
+          tools: /opt/ci-tools/codeql-bundle-go-linux64.tar.zst
+          ram: '3072'
+          threads: '2'
+          dependency-caching: false
+      - name: Build traced Go source
+        id: build
+        timeout-minutes: 30
+        run: go build -v ./...
+      - name: Analyze and upload results to tested Fork branch
+        id: analyze
+        timeout-minutes: 80
+        uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370
+        with:
+          ram: '3072'
+          threads: '2'
+          output: ${{ runner.temp }}/sarif
+          ref: refs/heads/${{ inputs.branch }}
+          sha: ${{ inputs.sha }}
+          category: /language:go/hermes
+          upload: always
+          upload-database: false
+          wait-for-processing: true
+      - name: Preserve SARIF and report exact outcomes
+        if: ${{ always() }}
+        env:
+          RESULTS: ${{ toJSON(steps) }}
+          TEST_SHA: ${{ inputs.sha }}
+          TEST_BRANCH: ${{ inputs.branch }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, os, pathlib, shutil, time
+          s = json.loads(os.environ['RESULTS'])
+          required = ['go', 'init', 'build', 'analyze']
+          root = pathlib.Path('/home/runner/cache/reports')
+          root.mkdir(exist_ok=True)
+          dest = root / (os.environ['GITHUB_RUN_ID'] + '-' + os.environ['GITHUB_RUN_ATTEMPT'])
+          dest.mkdir(exist_ok=True)
+          files = {}
+          for src in (pathlib.Path(os.environ['RUNNER_TEMP']) / 'sarif').glob('*.sarif'):
+              shutil.copyfile(src, dest / src.name)
+              files[src.name] = hashlib.sha256(src.read_bytes()).hexdigest()
+          (dest / 'manifest.json').write_text(json.dumps({'sha': os.environ['TEST_SHA'], 'branch': os.environ['TEST_BRANCH'], 'url': os.environ['RUN_URL'], 'files': files}, indent=2))
+          for i, p in enumerate(sorted(root.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True)):
+              if p.is_dir() and not p.is_symlink() and (i >= 20 or p.stat().st_mtime < time.time()-14*86400):
+                  shutil.rmtree(p)
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as f:
+              f.write('\n| Check | Outcome |\n|---|---|\n')
+              for k in required:
+                  f.write(f"| {k} | {s.get(k, {}).get('outcome', 'not run')} |\n")
+              f.write(f'\nSARIF retained on Hermes: {bool(files)}. Upload targets the tested SHA, not the CI control commit. Analysis success does not mean zero security findings.\n')
+          raise SystemExit(not files or any(s.get(k, {}).get('outcome') != 'success' for k in required))
+          PY

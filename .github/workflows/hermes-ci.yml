@@ -1,8 +1,14 @@
 name: Hermes personal CI
-run-name: "Hermes ${{ inputs.branch }} @ ${{ inputs.sha }} [${{ inputs.request }}]"
+run-name: "Hermes ${{ inputs.suite }} ${{ inputs.branch }} @ ${{ inputs.sha }} [${{ inputs.request }}]"
 on:
   workflow_dispatch:
     inputs:
+      suite:
+        description: Check suite
+        required: true
+        default: basic
+        type: choice
+        options: [basic, extended]
       branch:
         description: Trusted personal Fork branch
         required: true
@@ -118,6 +124,31 @@ jobs:
         run: |
           make test-race
           cp coverage.txt "$RUNNER_TEMP/coverage-race.txt"
+      - name: Generated project toolchain
+        id: generated_tools
+        if: ${{ !cancelled() && inputs.suite == 'extended' && steps.go.outcome == 'success' }}
+        timeout-minutes: 15
+        continue-on-error: true
+        env:
+          GOBIN: ${{ runner.temp }}/bin
+        run: |
+          mkdir -p "$GOBIN"
+          protoc --version
+          go install -mod=readonly google.golang.org/protobuf/cmd/protoc-gen-go
+          (cd tools/protoc-gen-go-triple && go install .)
+          echo "$GOBIN" >> "$GITHUB_PATH"
+      - name: Generated CLI projects (real compilation)
+        id: generated
+        if: ${{ !cancelled() && inputs.suite == 'extended' && steps.generated_tools.outcome == 'success' }}
+        timeout-minutes: 30
+        continue-on-error: true
+        run: make -C tools/dubbogo-cli test-generated-projects
+      - name: Linux RISC-V cross build
+        id: riscv
+        if: ${{ !cancelled() && inputs.suite == 'extended' && steps.go.outcome == 'success' }}
+        timeout-minutes: 30
+        continue-on-error: true
+        run: make build GOOS=linux GOARCH=riscv64 CGO_ENABLED=0
       - name: Setup OpenAPI module Go
         id: openapi_go
         if: ${{ !cancelled() && steps.go.outcome == 'success' }}
@@ -175,17 +206,20 @@ jobs:
         if: ${{ always() }}
         env:
           RESULTS: ${{ toJSON(steps) }}
+          SUITE: ${{ inputs.suite }}
         run: |
           python3 - <<'PY'
           import json, os
           s = json.loads(os.environ['RESULTS'])
           required = ['license', 'go', 'java', 'zk', 'format', 'lint', 'unit', 'race', 'openapi_go', 'openapi', 'coverage']
+          if os.environ['SUITE'] == 'extended':
+              required += ['generated_tools', 'generated', 'riscv']
           with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as f:
               f.write('\n| Check | Outcome |\n|---|---|\n')
               for k in required:
                   f.write(f"| {k} | {s.get(k, {}).get('outcome', 'not run')} |\n")
               f.write(f"| optional GitHub artifact mirror | {s.get('upload', {}).get('outcome', 'not run')} |\n")
               f.write('\nCoverage is retained on Hermes (latest 20 runs, up to 14 days, subject to CI cache budget). GitHub mirror failure is a reporting limitation, not a test pass.\n')
-              f.write('\nIntegration, generated CLI projects and RISC-V: outside phase 1. Codecov upload: not configured.\n')
+              f.write('\nSamples integration and Codecov upload: not configured. CodeQL runs separately. RISC-V is cross-compilation, not runtime emulation.\n')
           raise SystemExit(any(s.get(k, {}).get('outcome') != 'success' for k in required))
           PY
