@@ -54,6 +54,11 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
+      - name: Verify CodeQL native prerequisites
+        id: prerequisites
+        run: |
+          command -v file
+          file "$(command -v go)"
       - name: Initialize CodeQL (upstream default Go queries)
         id: init
         uses: github/codeql-action/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4
@@ -93,7 +98,7 @@ jobs:
           python3 - <<'PY'
           import hashlib, json, os, pathlib, shutil, time
           s = json.loads(os.environ['RESULTS'])
-          required = ['go', 'init', 'build', 'analyze']
+          required = ['go', 'prerequisites', 'init', 'build', 'analyze']
           root = pathlib.Path('/home/runner/cache/reports')
           root.mkdir(exist_ok=True)
           dest = root / (os.environ['GITHUB_RUN_ID'] + '-' + os.environ['GITHUB_RUN_ATTEMPT'])
