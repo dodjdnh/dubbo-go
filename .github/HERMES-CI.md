@@ -38,6 +38,15 @@ ZooKeeper 3.9.4, etcd 3.4.28, Nacos 2.5.2. No host socket or published ports.
 direct, async and streaming, with Java 17/Maven, and fails if a required Java
 phase was skipped. Existing sample defects are not fixed or hidden by CI.
 These are explicit subsets, not a replacement claim for full upstream CI.
+`samples-observability` compiles unchanged upstream Go provider/consumer
+programs and uses native Nacos 2.5.2, Jaeger 1.57.0, Collector 0.104.0,
+Prometheus 2.55.1 and Grafana 11.2.0. Versions match the pinned Samples
+Compose, not Admin's different Collector contract version. Only disposable
+service addresses/paths are rewired from Docker names to container loopback.
+The upstream Python semantic checks run unchanged: actual Prometheus scrape,
+cross-service trace, Grafana datasource health/proxy query and dashboard.
+Additional checks require both provider and consumer metric labels and real
+successful client responses. No browser journey is claimed.
 The current pinned Samples main SHA is
 `6e791058f58fd28434f859eb132eb93dd26d5418`. The immutable SDK checkout is
 verified through its local module replacement. `full` still means extended

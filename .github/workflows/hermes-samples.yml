@@ -6,7 +6,7 @@ on:
       suite:
         description: Isolated integration subset (not full upstream suite)
         type: choice
-        options: [core, registry, interop]
+        options: [core, registry, interop, observability]
         default: core
         required: true
       branch:
@@ -50,7 +50,7 @@ jobs:
           [[ "$TEST_SHA" =~ ^[a-f0-9]{40}$ ]]
           [[ "$TEST_BRANCH" =~ ^(main|develop|(feat|fix|feature|test|docs|refactor|chore)/[a-zA-Z0-9._/-]+)$ ]]
           test "$SAMPLES_SHA" = 6e791058f58fd28434f859eb132eb93dd26d5418
-          [[ "$SAMPLES_SUITE" =~ ^(core|registry|interop)$ ]]
+          [[ "$SAMPLES_SUITE" =~ ^(core|registry|interop|observability)$ ]]
           test "$(id -u)" = 1000
           test ! -e /var/run/docker.sock
           test ! -e /run/podman/podman.sock
