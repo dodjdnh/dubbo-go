@@ -69,6 +69,8 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
+      - name: Samples CI driver regression checks
+        run: python3 /opt/ci-samples/test-samples-driver.py
       - name: Real upstream Samples integration subset
         timeout-minutes: 170
         env:
