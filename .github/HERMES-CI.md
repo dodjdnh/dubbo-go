@@ -37,6 +37,11 @@ ZooKeeper 3.9.4, etcd 3.4.28, Nacos 2.5.2. No host socket or published ports.
 `samples-interop` attempts the unchanged upstream shell flow for helloworld,
 direct, async and streaming, with Java 17/Maven, and fails if a required Java
 phase was skipped. Existing sample defects are not fixed or hidden by CI.
+In the pinned async sample, the Java server listens on 50051 while both clients
+use 20000; the upstream script skips this phase and returns success. Hermes
+deliberately treats that as incomplete interop and keeps the overall job red.
+Other interop samples are reported individually. The wrapper requires actual
+response markers, not merely service startup or a zero script exit code.
 These are explicit subsets, not a replacement claim for full upstream CI.
 `samples-observability` compiles unchanged upstream Go provider/consumer
 programs and uses native Nacos 2.5.2, Jaeger 1.57.0, Collector 0.104.0,
@@ -47,6 +52,15 @@ The upstream Python semantic checks run unchanged: actual Prometheus scrape,
 cross-service trace, Grafana datasource health/proxy query and dashboard.
 Additional checks require both provider and consumer metric labels and real
 successful client responses. No browser journey is claimed.
+
+Samples acceptance (2026-11-04, SDK `926e617517e11c59eea5df0d8f2ed6739a973545`):
+
+- [Core: 9/9 PASS](https://github.com/dodjdnh/dubbo-go/actions/runs/41780957279).
+- [Registry: 3/3 PASS](https://github.com/dodjdnh/dubbo-go/actions/runs/41787938661).
+- [Observability: PASS](https://github.com/dodjdnh/dubbo-go/actions/runs/41785589354).
+- [Java interop: 3/4 PASS, overall FAIL](https://github.com/dodjdnh/dubbo-go/actions/runs/41800787087):
+  helloworld, direct and streaming passed; async has the port mismatch above.
+
 The current pinned Samples main SHA is
 `6e791058f58fd28434f859eb132eb93dd26d5418`. The immutable SDK checkout is
 verified through its local module replacement. `full` still means extended
