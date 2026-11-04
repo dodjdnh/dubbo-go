@@ -1,0 +1,74 @@
+name: Hermes Samples integration
+run-name: "Hermes samples-core ${{ inputs.branch }} @ ${{ inputs.sha }} [${{ inputs.request }}]"
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: Trusted personal Fork branch
+        required: true
+        type: string
+      sha:
+        description: Immutable tested SDK SHA
+        required: true
+        type: string
+      samples_sha:
+        description: Pinned apache/dubbo-go-samples main snapshot
+        required: true
+        type: string
+      request:
+        description: Windows controller request ID
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  samples:
+    if: github.repository == 'dodjdnh/dubbo-go' && github.actor == 'dodjdnh' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, linux, x64, hermes-ci, 'hermes-${{ github.run_id }}-${{ github.run_attempt }}']
+    timeout-minutes: 180
+    env:
+      GOMAXPROCS: '2'
+      GOFLAGS: -p=2
+      MAVEN_OPTS: -Xmx512m -XX:ActiveProcessorCount=2 -Dmaven.repo.local=/home/runner/cache/maven
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Validate dispatch and isolation
+        env:
+          TEST_SHA: ${{ inputs.sha }}
+          TEST_BRANCH: ${{ inputs.branch }}
+          SAMPLES_SHA: ${{ inputs.samples_sha }}
+        run: |
+          [[ "$TEST_SHA" =~ ^[a-f0-9]{40}$ ]]
+          [[ "$TEST_BRANCH" =~ ^(main|develop|(feat|fix|feature|test|docs|refactor|chore)/[a-zA-Z0-9._/-]+)$ ]]
+          test "$SAMPLES_SHA" = 6e791058f58fd28434f859eb132eb93dd26d5418
+          test "$(id -u)" = 1000
+          test ! -e /var/run/docker.sock
+          test ! -e /run/podman/podman.sock
+          grep -q '^CapBnd:.*0000000000000000' /proc/self/status
+      - name: Checkout exact tested SDK SHA
+        env:
+          TEST_SHA: ${{ inputs.sha }}
+        run: |
+          git init .
+          git fetch /opt/source.bundle '+refs/oss-ci/*:refs/oss-ci/*'
+          git checkout --detach "$TEST_SHA"
+          test "$(git rev-parse HEAD)" = "$TEST_SHA"
+          git remote add origin "https://github.com/$GITHUB_REPOSITORY.git"
+      - name: Setup SDK Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Real upstream Samples Go consumer-provider core
+        timeout-minutes: 170
+        env:
+          TEST_SHA: ${{ inputs.sha }}
+          SAMPLES_SHA: ${{ inputs.samples_sha }}
+        run: |
+          python3 /opt/ci-samples/run-samples.py --sdk "$PWD" \
+            --sdk-sha "$TEST_SHA" --samples-sha "$SAMPLES_SHA" --suite core
+      - name: Preserve source cleanliness
+        if: ${{ always() }}
+        run: git diff --exit-code && test -z "$(git status --porcelain)"

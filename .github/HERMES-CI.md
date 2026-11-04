@@ -24,7 +24,13 @@ Windows usage: `oss-ci dubbo-go feat/example -Profile full` or
 current remote HEAD without pushing. Only Fork-default workflows are loaded;
 feature branches need no personal CI files.
 
-Samples integration, publishing and release automation remain out of scope.
+Samples integration now has a separate `samples-core` profile, using the
+same global lock and 2 CPU / 5GiB limit. It pins both the SDK SHA and Samples
+main SHA and executes unchanged Go providers and consumers in a disposable
+container. This is NOT the entire upstream integration suite; Java interop,
+registry suites and the observability stack are not included in core.
+Use `oss-ci dubbo-go feat/example -Profile samples-core`.
+Publishing and release automation remain out of scope.
 Coverage generation is retained; Codecov upload is not configured. RISC-V is
 cross-compilation, not emulated execution. Generated CLI projects retain the
 SDK versions selected by upstream templates. The Collector binary is the
