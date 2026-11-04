@@ -1,8 +1,14 @@
 name: Hermes Samples integration
-run-name: "Hermes samples-core ${{ inputs.branch }} @ ${{ inputs.sha }} [${{ inputs.request }}]"
+run-name: "Hermes samples-${{ inputs.suite }} ${{ inputs.branch }} @ ${{ inputs.sha }} [${{ inputs.request }}]"
 on:
   workflow_dispatch:
     inputs:
+      suite:
+        description: Isolated integration subset (not full upstream suite)
+        type: choice
+        options: [core, registry, interop]
+        default: core
+        required: true
       branch:
         description: Trusted personal Fork branch
         required: true
@@ -39,10 +45,12 @@ jobs:
           TEST_SHA: ${{ inputs.sha }}
           TEST_BRANCH: ${{ inputs.branch }}
           SAMPLES_SHA: ${{ inputs.samples_sha }}
+          SAMPLES_SUITE: ${{ inputs.suite }}
         run: |
           [[ "$TEST_SHA" =~ ^[a-f0-9]{40}$ ]]
           [[ "$TEST_BRANCH" =~ ^(main|develop|(feat|fix|feature|test|docs|refactor|chore)/[a-zA-Z0-9._/-]+)$ ]]
           test "$SAMPLES_SHA" = 6e791058f58fd28434f859eb132eb93dd26d5418
+          [[ "$SAMPLES_SUITE" =~ ^(core|registry|interop)$ ]]
           test "$(id -u)" = 1000
           test ! -e /var/run/docker.sock
           test ! -e /run/podman/podman.sock
@@ -61,14 +69,15 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
-      - name: Real upstream Samples Go consumer-provider core
+      - name: Real upstream Samples integration subset
         timeout-minutes: 170
         env:
           TEST_SHA: ${{ inputs.sha }}
           SAMPLES_SHA: ${{ inputs.samples_sha }}
+          SAMPLES_SUITE: ${{ inputs.suite }}
         run: |
           python3 /opt/ci-samples/run-samples.py --sdk "$PWD" \
-            --sdk-sha "$TEST_SHA" --samples-sha "$SAMPLES_SHA" --suite core
+            --sdk-sha "$TEST_SHA" --samples-sha "$SAMPLES_SHA" --suite "$SAMPLES_SUITE"
       - name: Preserve source cleanliness
         if: ${{ always() }}
         run: git diff --exit-code && test -z "$(git status --porcelain)"

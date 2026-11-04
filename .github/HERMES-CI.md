@@ -30,6 +30,18 @@ main SHA and executes unchanged Go providers and consumers in a disposable
 container. This is NOT the entire upstream integration suite; Java interop,
 registry suites and the observability stack are not included in core.
 Use `oss-ci dubbo-go feat/example -Profile samples-core`.
+`samples-registry` runs the unchanged ZooKeeper, etcd and Nacos Go sample
+programs, starting checksummed official native services inside the SAME
+nonroot container, one registry at a time. Versions match upstream Compose:
+ZooKeeper 3.9.4, etcd 3.4.28, Nacos 2.5.2. No host socket or published ports.
+`samples-interop` attempts the unchanged upstream shell flow for helloworld,
+direct, async and streaming, with Java 17/Maven, and fails if a required Java
+phase was skipped. Existing sample defects are not fixed or hidden by CI.
+These are explicit subsets, not a replacement claim for full upstream CI.
+The current pinned Samples main SHA is
+`6e791058f58fd28434f859eb132eb93dd26d5418`. The immutable SDK checkout is
+verified through its local module replacement. `full` still means extended
+plus CodeQL; it does NOT silently include Samples profiles.
 Publishing and release automation remain out of scope.
 Coverage generation is retained; Codecov upload is not configured. RISC-V is
 cross-compilation, not emulated execution. Generated CLI projects retain the
